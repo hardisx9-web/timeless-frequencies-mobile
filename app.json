@@ -4,7 +4,7 @@
     "slug": "timeless-frequencies",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/branding/timeless-frequencies-logo.png",
     "scheme": "timelessfrequencies",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -24,10 +24,8 @@
         "android.permission.ACTIVITY_RECOGNITION"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#090D0C",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#100C0A",
+        "foregroundImage": "./assets/branding/timeless-frequencies-logo.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -49,7 +47,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#100C0A",
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/branding/timeless-frequencies-logo.png",
           "imageWidth": 200
         }
       ],

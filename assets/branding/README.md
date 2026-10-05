@@ -1,5 +1,4 @@
 # Branding assets
 
-Place the supplied final logo at
-`assets/branding/timeless-frequencies-logo.png`. The current app branding remains
-unchanged until the final logo is supplied.
+The supplied final logo is `assets/branding/timeless-frequencies-logo.png`. It
+is used for the app icon, Android adaptive icon foreground, and system splash.
