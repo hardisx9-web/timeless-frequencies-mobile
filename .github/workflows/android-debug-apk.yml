@@ -43,6 +43,24 @@ jobs:
           CI: '1'
         run: npx expo prebuild --platform android --no-install
 
+      - name: Include JavaScript bundle in the debug APK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle_file = Path("android/app/build.gradle")
+          contents = gradle_file.read_text()
+          marker = "react {\n"
+          if contents.count(marker) != 1:
+              raise SystemExit("Could not locate the generated React Native Gradle configuration.")
+          if "debuggableVariants = []" in contents:
+              raise SystemExit("Debug bundle configuration was already applied.")
+          gradle_file.write_text(
+              contents.replace(marker, marker + "    debuggableVariants = []\n", 1)
+          )
+          PY
+          grep -Fq 'debuggableVariants = []' android/app/build.gradle
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 

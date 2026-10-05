@@ -4,6 +4,8 @@ import OpeningVideo from '../components/OpeningVideo';
 import RadioScreen from '../components/RadioScreen';
 import { loadUserPreferences } from '../storage/userPreferences';
 
+const PREFERENCES_LOAD_TIMEOUT_MS = 5000;
+
 type MetroRequire = NodeRequire & {
   context(
     path: string,
@@ -34,35 +36,43 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let active = true;
+    let startupResolved = false;
+
+    const continueStartup = (openingAnimation: boolean | null) => {
+      if (!active || startupResolved) {
+        return;
+      }
+      startupResolved = true;
+      promptAfterOpening.current = openingAnimation === null;
+
+      if (openingAnimation !== false && openingVideoSource !== null) {
+        setLaunchState('opening');
+        return;
+      }
+
+      setLaunchState('radio');
+      setShowOpeningPreferencePrompt(openingAnimation === null);
+    };
+
+    const timeout = setTimeout(() => {
+      console.warn(
+        'Radio preferences took too long to load; continuing with defaults.',
+      );
+      continueStartup(null);
+    }, PREFERENCES_LOAD_TIMEOUT_MS);
 
     void loadUserPreferences()
       .then((preferences) => {
-        if (!active) {
-          return;
-        }
-        promptAfterOpening.current = preferences.openingAnimation === null;
-
-        if (
-          preferences.openingAnimation !== false &&
-          openingVideoSource !== null
-        ) {
-          setLaunchState('opening');
-          return;
-        }
-
-        setLaunchState('radio');
-        setShowOpeningPreferencePrompt(preferences.openingAnimation === null);
+        continueStartup(preferences.openingAnimation);
       })
       .catch((error: unknown) => {
-        if (!active) {
-          return;
-        }
-        setLaunchState('radio');
-        setShowOpeningPreferencePrompt(true);
+        console.error('Could not load radio preferences.', error);
+        continueStartup(null);
       });
 
     return () => {
       active = false;
+      clearTimeout(timeout);
     };
   }, []);
 
