@@ -1,0 +1,104 @@
+name: Android debug APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build installable APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify generated app identity
+        working-directory: android
+        run: |
+          grep -Fq "applicationId 'com.timelessfrequencies.app'" app/build.gradle
+          grep -Fq '<string name="app_name">Timeless Frequencies</string>' app/src/main/res/values/strings.xml
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Verify APK and bundled assets
+        env:
+          APK_PATH: android/app/build/outputs/apk/debug/app-debug.apk
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import os
+          import zipfile
+
+          apk_path = os.environ["APK_PATH"]
+          video_path = "assets/video/opening.mp4"
+          video_size = os.path.getsize(video_path)
+          with open(video_path, "rb") as video:
+              expected_hash = hashlib.sha256(video.read()).hexdigest()
+
+          if not os.path.isfile(apk_path):
+              raise SystemExit(f"APK was not produced: {apk_path}")
+
+          with zipfile.ZipFile(apk_path) as apk:
+              names = apk.namelist()
+              packaged_video = any(
+                  hashlib.sha256(apk.read(name)).hexdigest() == expected_hash
+                  for name in names
+                  if not name.endswith("/")
+                  and apk.getinfo(name).file_size == video_size
+              )
+              if not packaged_video:
+                  raise SystemExit("The exact local opening video is missing from the APK.")
+              if not any("ic_launcher" in name for name in names):
+                  raise SystemExit("Android launcher branding is missing from the APK.")
+              if not any("splashscreen_logo" in name for name in names):
+                  raise SystemExit("The configured splash branding is missing from the APK.")
+
+          print("APK contains the exact local opening video, launcher icon, and splash branding.")
+          PY
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: timeless-frequencies-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
