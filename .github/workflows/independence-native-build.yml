@@ -1,0 +1,88 @@
+name: Independence verification Android APK
+
+on:
+  push:
+    branches:
+      - verification/native-build-20261029
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-debug-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build installable APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        env:
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Include JavaScript bundle in the debug APK
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle_file = Path("android/app/build.gradle")
+          contents = gradle_file.read_text()
+          marker = "react {\n"
+          if contents.count(marker) != 1:
+              raise SystemExit("Could not locate the generated React Native Gradle configuration.")
+          if "debuggableVariants = []" in contents:
+              raise SystemExit("Debug bundle configuration was already applied.")
+          gradle_file.write_text(
+              contents.replace(marker, marker + "    debuggableVariants = []\n", 1)
+          )
+          PY
+          grep -Fq 'debuggableVariants = []' android/app/build.gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Verify generated app identity
+        working-directory: android
+        run: |
+          grep -Fq "applicationId 'com.timelessfrequencies.app'" app/build.gradle
+          grep -Fq '<string name="app_name">Timeless Frequencies</string>' app/src/main/res/values/strings.xml
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Verify APK exists
+        run: |
+          test -f android/app/build/outputs/apk/debug/app-debug.apk
+          echo "APK built successfully."
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: timeless-frequencies-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
